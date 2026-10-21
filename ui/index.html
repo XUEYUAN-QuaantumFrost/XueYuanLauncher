@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XueYuan Launcher</title>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<style>
+  :root{
+    --bg-base:#0A0C10; --bg-surface:#11141B; --bg-elevated:#181C25; --bg-hover:#1E242F;
+    --border:#252A35; --border-light:#2F3542;
+    --text-primary:#E8ECF1; --text-secondary:#9BA4B4; --text-muted:#6B7280;
+    --accent:#34D399; --accent-dim:rgba(52,211,153,.12); --accent-border:rgba(52,211,153,.35);
+    --warning:#FBBF24; --danger:#F87171; --danger-dim:rgba(248,113,113,.12);
+    --radius-sm:8px; --radius-md:12px; --radius-lg:16px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","PingFang SC",sans-serif;
+    background:var(--bg-base);color:var(--text-primary);font-size:14px;line-height:1.5;
+    -webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+  #app{display:flex;flex-direction:column;height:100vh;min-height:0}
+
+  /* ---------- 顶栏 ---------- */
+  .topbar{height:54px;flex-shrink:0;display:flex;align-items:center;gap:12px;
+    padding:0 20px;background:var(--bg-surface);border-bottom:1px solid var(--border)}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:.3px}
+  .logo-mark{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#34D399,#0EA5E9);font-size:16px}
+  .topbar .spacer{flex:1}
+  .user-pill{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:20px;
+    background:var(--bg-elevated);border:1px solid var(--border);font-size:12.5px;color:var(--text-secondary)}
+  .user-pill .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  .user-pill.anon .dot{background:var(--text-muted)}
+  .btn{padding:7px 16px;border-radius:var(--radius-sm);border:none;cursor:pointer;font-size:13px;font-weight:600;
+    transition:.15s;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border)}
+  .btn:hover{background:var(--bg-hover)}
+  .btn.primary{background:var(--accent);color:#06231a;border-color:transparent}
+  .btn.primary:hover{filter:brightness(1.1)}
+  .btn.primary:disabled{opacity:.45;cursor:not-allowed}
+  .btn.ghost{background:transparent;border-color:var(--border)}
+  .btn.danger{background:var(--danger-dim);color:var(--danger);border-color:transparent}
+  .btn.small{padding:4px 12px;font-size:12px}
+
+  /* ---------- 主体 ---------- */
+  .body{flex:1;min-height:0;display:flex;flex-direction:column}
+  .pages{flex:1;min-height:0;overflow-y:auto;padding:22px 26px 30px}
+  .page{display:none}
+  .page.active{display:block;animation:fadein .18s ease}
+  @keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .page-title{font-size:19px;font-weight:700;margin-bottom:16px}
+  .page-sub{font-size:12.5px;color:var(--text-muted);margin-top:-10px;margin-bottom:18px}
+
+  /* ---------- 卡片 ---------- */
+  .card{background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+    padding:20px;margin-bottom:16px}
+  .card h3{font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .card h3 .tag{font-size:11px;color:var(--text-muted);font-weight:500;background:var(--bg-hover);
+    padding:2px 8px;border-radius:10px}
+
+  /* 首页启动卡 */
+  .launch-card{background:linear-gradient(135deg,rgba(52,211,153,.10),rgba(14,165,233,.08)),var(--bg-surface);
+    border:1px solid var(--accent-border);padding:26px}
+  .launch-row{display:flex;gap:16px;align-items:stretch;flex-wrap:wrap}
+  .launch-left{flex:1;min-width:260px}
+  .launch-right{display:flex;flex-direction:column;justify-content:center;gap:10px;min-width:200px}
+  .version-select{width:100%;background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:12px 14px;font-size:15px;margin-bottom:12px}
+  .version-select:focus{outline:none;border-color:var(--accent)}
+  .btn-launch{font-size:17px;padding:15px 20px;border-radius:var(--radius-md);width:100%;font-weight:800;
+    letter-spacing:1px;background:var(--accent);color:#06231a;border:none;cursor:pointer;transition:.15s}
+  .btn-launch:hover{filter:brightness(1.12)}
+  .btn-launch:disabled{opacity:.4;cursor:not-allowed;filter:none}
+  .meta-line{font-size:12.5px;color:var(--text-muted);margin-top:8px;display:flex;gap:10px;flex-wrap:wrap}
+  .meta-line b{color:var(--text-secondary);font-weight:600}
+  .status-badge{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:20px;font-size:12.5px;font-weight:600}
+  .status-badge .dot{width:8px;height:8px;border-radius:50%}
+  .st-idle{background:var(--bg-elevated);color:var(--text-muted)}
+  .st-run{background:var(--accent-dim);color:var(--accent)}
+  .st-run .dot{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+
+  /* 进度条 */
+  .progress-wrap{display:none;margin-top:14px}
+  .progress-wrap.show{display:block}
+  .progress-status{font-size:12.5px;color:var(--text-secondary);margin-bottom:6px;word-break:break-all}
+  .progress-bar{height:8px;background:var(--bg-elevated);border-radius:6px;overflow:hidden}
+  .progress-fill{height:100%;width:0;background:linear-gradient(90deg,#34D399,#0EA5E9);border-radius:6px;transition:width .2s}
+
+  /* 版本列表 */
+  .list-head{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  .list-head input[type=text]{flex:1;min-width:160px;background:var(--bg-elevated);color:var(--text-primary);
+    border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 13px;font-size:13.5px}
+  .list-head input[type=text]:focus{outline:none;border-color:var(--accent)}
+  .chip{cursor:pointer;user-select:none}
+  .chip.on{background:var(--accent);color:#06231a;border-color:transparent}
+  .version-row{display:flex;align-items:center;gap:12px;padding:11px 14px;border:1px solid var(--border);
+    border-radius:var(--radius-md);margin-bottom:8px;background:var(--bg-surface)}
+  .version-row:hover{background:var(--bg-elevated)}
+  .v-name{font-weight:600;font-size:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .v-type{font-size:11px;padding:2px 9px;border-radius:10px;background:var(--bg-hover);color:var(--text-muted)}
+  .v-type.release{background:var(--accent-dim);color:var(--accent)}
+  .v-type.snapshot{background:rgba(251,191,36,.12);color:var(--warning)}
+  .v-installed{font-size:11px;color:var(--accent);font-weight:600}
+  .v-time{font-size:11.5px;color:var(--text-muted)}
+
+  /* 加载器 */
+  .loader-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+  .loader-item{border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;background:var(--bg-surface);cursor:pointer;transition:.15s}
+  .loader-item:hover{border-color:var(--accent-border);background:var(--bg-elevated)}
+  .loader-item .l-name{font-weight:700;font-size:15px;margin-bottom:4px}
+  .loader-item .l-desc{font-size:12px;color:var(--text-muted);line-height:1.5}
+
+  /* 设置 */
+  .set-row{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid var(--border)}
+  .set-row:last-child{border-bottom:none}
+  .set-label{width:130px;flex-shrink:0;font-size:13.5px;color:var(--text-secondary)}
+  .set-control{flex:1;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .set-control input[type=text]{flex:1;min-width:140px;background:var(--bg-elevated);color:var(--text-primary);
+    border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:13px}
+  .set-control input[type=text]:focus{outline:none;border-color:var(--accent)}
+  .set-control input[type=number]{width:90px;background:var(--bg-elevated);color:var(--text-primary);
+    border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;font-size:13px}
+  .set-control input[type=range]{flex:1;accent-color:var(--accent);min-width:120px}
+  .set-control select{background:var(--bg-elevated);color:var(--text-primary);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:9px 12px;font-size:13px}
+  .set-help{font-size:11.5px;color:var(--text-muted);margin-top:4px;width:100%}
+
+  /* 登录弹层 */
+  .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal-mask.show{display:flex}
+  .modal{width:min(480px,92vw);background:var(--bg-surface);border:1px solid var(--border);
+    border-radius:var(--radius-lg);padding:26px;max-height:86vh;overflow-y:auto}
+  .modal h3{font-size:16px;font-weight:700;margin-bottom:16px}
+  .modal .field{margin-bottom:14px}
+  .modal .field label{display:block;font-size:12.5px;color:var(--text-secondary);margin-bottom:6px}
+  .modal input[type=text],.modal textarea{width:100%;background:var(--bg-elevated);color:var(--text-primary);
+    border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 13px;font-size:13.5px;resize:vertical}
+  .modal input[type=text]:focus,.modal textarea:focus{outline:none;border-color:var(--accent)}
+  .modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:8px}
+  .modal .link{font-size:12.5px;color:var(--accent);word-break:break-all;cursor:pointer;text-decoration:underline}
+
+  /* 日志抽屉 */
+  .log-drawer{height:0;flex-shrink:0;background:#0B0E13;border-top:1px solid var(--border);overflow:hidden;
+    display:flex;flex-direction:column;transition:height .2s}
+  .log-drawer.open{height:210px}
+  .log-head{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--bg-surface);
+    border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text-muted);cursor:pointer}
+  .log-head .spacer{flex:1}
+  .log-body{flex:1;overflow-y:auto;padding:10px 16px;font-family:ui-monospace,Consolas,monospace;font-size:12px;
+    color:#A8B3C2;white-space:pre-wrap;word-break:break-all}
+  .log-body .err{color:var(--danger)}
+
+  /* toast */
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg-elevated);
+    border:1px solid var(--border-light);border-radius:var(--radius-md);padding:11px 20px;font-size:13.5px;
+    opacity:0;pointer-events:none;transition:.25s;z-index:99;max-width:80vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{border-color:var(--danger);color:var(--danger)}
+
+  /* 底部导航 */
+  .navbar{flex-shrink:0;display:flex;background:var(--bg-surface);border-top:1px solid var(--border)}
+  .nav-item{flex:1;padding:11px 0;text-align:center;font-size:13px;color:var(--text-muted);cursor:pointer;
+    border-bottom:2px solid transparent;transition:.15s;user-select:none}
+  .nav-item:hover{color:var(--text-secondary)}
+  .nav-item.on{color:var(--accent);border-bottom-color:var(--accent)}
+  .empty{text-align:center;color:var(--text-muted);padding:40px 0;font-size:13px}
+  .empty b{display:block;font-size:15px;color:var(--text-secondary);margin-bottom:6px}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 顶栏 -->
+  <div class="topbar">
+    <div class="logo"><div class="logo-mark">◆</div>XueYuan Launcher</div>
+    <div class="spacer"></div>
+    <div class="user-pill anon" id="userPill"><span class="dot"></span><span id="userName">未登录</span></div>
+    <button class="btn small" id="loginBtn">登录</button>
+  </div>
+
+  <!-- 主体 -->
+  <div class="body">
+    <div class="pages">
+      <!-- 首页 -->
+      <div class="page active" id="page-home">
+        <div class="page-title">开始游戏</div>
+        <div class="card launch-card">
+          <div class="launch-row">
+            <div class="launch-left">
+              <select class="version-select" id="launchVersion"></select>
+              <button class="btn-launch" id="launchBtn">启 动 游 戏</button>
+              <div class="meta-line">
+                <span>Java：<b id="javaInfo">检测中…</b></span>
+                <span>内存：<b id="memInfo">-</b></span>
+                <span>登录：<b id="authInfo">-</b></span>
+              </div>
+              <div class="progress-wrap" id="launchProgressWrap">
+                <div class="progress-status" id="launchProgressStatus"></div>
+                <div class="progress-bar"><div class="progress-fill" id="launchProgressFill"></div></div>
+              </div>
+            </div>
+            <div class="launch-right">
+              <div class="status-badge st-idle" id="gameBadge"><span class="dot"></span><span id="gameBadgeText">未运行</span></div>
+              <button class="btn danger" id="stopBtn" disabled>停止游戏</button>
+              <button class="btn ghost" id="logToggleBtn">打开日志</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>已安装的版本 <span class="tag" id="installedCount">0 个</span></h3>
+          <div id="installedList"><div class="empty"><b>还没有安装任何版本</b>去「下载」页选择一个版本安装吧</div></div>
+        </div>
+      </div>
+
+      <!-- 下载 -->
+      <div class="page" id="page-download">
+        <div class="page-title">下载版本</div>
+        <div class="page-sub">支持官方源与国内镜像源；已安装的版本会标记出来</div>
+        <div class="card">
+          <div class="list-head">
+            <input type="text" id="searchInput" placeholder="搜索版本号…">
+            <button class="btn chip" data-type="all" id="fAll">全部</button>
+            <button class="btn chip on" data-type="release" id="fRelease">正式版</button>
+            <button class="btn chip" data-type="snapshot" id="fSnapshot">快照</button>
+            <button class="btn primary small" id="refreshBtn">刷新列表</button>
+          </div>
+          <div class="progress-wrap" id="dlProgressWrap">
+            <div class="progress-status" id="dlProgressStatus"></div>
+            <div class="progress-bar"><div class="progress-fill" id="dlProgressFill"></div></div>
+          </div>
+          <div id="versionList"><div class="empty"><b>正在加载版本列表…</b>请稍候</div></div>
+        </div>
+      </div>
+
+      <!-- 模组 -->
+      <div class="page" id="page-mods">
+        <div class="page-title">模组与整合包</div>
+        <div class="page-sub">为已安装的版本安装加载器，或导入整合包</div>
+        <div class="card">
+          <h3>选择目标版本</h3>
+          <select class="version-select" id="modsVersion"></select>
+        </div>
+        <div class="card">
+          <h3>安装模组加载器</h3>
+          <div class="loader-grid" id="loaderGrid"></div>
+          <div class="progress-wrap" id="modProgressWrap">
+            <div class="progress-status" id="modProgressStatus"></div>
+            <div class="progress-bar"><div class="progress-fill" id="modProgressFill"></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>整合包导入 <span class="tag">.mrpack / .zip</span></h3>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+            <button class="btn primary" id="importBtn">选择整合包文件</button>
+            <span style="font-size:12px;color:var(--text-muted)">支持 Modrinth(.mrpack)、MultiMC/HMCL(.zip)、CurseForge(.zip)</span>
+          </div>
+          <input type="file" id="importFile" accept=".mrpack,.zip" style="display:none">
+        </div>
+        <div class="card">
+          <h3>模组文件夹</h3>
+          <button class="btn ghost" id="openModsBtn">打开 mods 文件夹</button>
+          <button class="btn ghost" id="openGameDirBtn" style="margin-left:8px">打开游戏目录</button>
+        </div>
+      </div>
+
+      <!-- 设置 -->
+      <div class="page" id="page-settings">
+        <div class="page-title">设置</div>
+        <div class="card">
+          <h3>基本设置</h3>
+          <div class="set-row">
+            <div class="set-label">游戏目录</div>
+            <div class="set-control">
+              <input type="text" id="setMinecraftDir" placeholder=".minecraft 目录路径">
+              <button class="btn ghost small" id="browseDirBtn">浏览</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">下载源</div>
+            <div class="set-control">
+              <select id="setSource">
+                <option value="official">Mojang 官方（默认）</option>
+                <option value="bmclapi">BMCLAPI 镜像</option>
+                <option value="mcbbs">MCBBS 镜像</option>
+              </select>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">Java 路径</div>
+            <div class="set-control">
+              <input type="text" id="setJavaPath" placeholder="留空 = 自动检测">
+              <button class="btn ghost small" id="detectJavaBtn">自动检测</button>
+              <button class="btn ghost small" id="browseJavaBtn">浏览</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">内存分配</div>
+            <div class="set-control">
+              <input type="range" id="setMemory" min="512" max="8192" step="256" style="max-width:240px">
+              <span id="memLabel" style="font-size:13px;color:var(--text-secondary);width:80px"></span>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">窗口分辨率</div>
+            <div class="set-control">
+              <input type="number" id="setWidth" min="480" max="7680" step="1"> ×
+              <input type="number" id="setHeight" min="320" max="4320" step="1">
+              <button class="btn chip" id="setResToggle" style="margin-left:6px">关</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <div class="set-label">JVM 参数</div>
+            <div class="set-control">
+              <input type="text" id="setJvmArgs" placeholder="附加 JVM 参数，用空格分隔（可选）">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:18px">
+            <button class="btn primary" id="saveSettingsBtn">保存设置</button>
+            <span style="font-size:12px;color:var(--text-muted);align-self:center">保存后立即生效</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 日志 -->
+    <div class="log-drawer" id="logDrawer">
+      <div class="log-head" id="logHead"><span>游戏日志</span><span class="spacer"></span><span id="logCount">0 行</span></div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+
+    <!-- 导航 -->
+    <div class="navbar">
+      <div class="nav-item on" data-page="home">首页</div>
+      <div class="nav-item" data-page="download">下载</div>
+      <div class="nav-item" data-page="mods">模组</div>
+      <div class="nav-item" data-page="settings">设置</div>
+    </div>
+  </div>
+</div>
+
+<!-- 登录弹层 -->
+<div class="modal-mask" id="loginModal">
+  <div class="modal">
+    <h3>登录</h3>
+    <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
+      <button class="btn" id="tabOffline">离线模式</button>
+      <button class="btn" id="tabMicrosoft">微软正版</button>
+      <button class="btn" id="tabAuthlib">外置登录</button>
+    </div>
+
+    <div id="paneOffline">
+      <div class="field"><label>游戏内名字</label>
+        <input type="text" id="offlineName" placeholder="输入你想显示的名字"></div>
+      <div class="row"><button class="btn primary" id="offlineOk">登录</button></div>
+    </div>
+
+    <div id="paneMicrosoft" style="display:none">
+      <div class="field">
+        <label>第一步：打开下面的授权链接</label>
+        <div class="link" id="msUrl">点击获取授权链接…</div>
+      </div>
+      <div class="field">
+        <label>第二步：授权完成后，把浏览器地址栏里的完整网址粘贴到这里</label>
+        <input type="text" id="msCallback" placeholder="https://login.live.com/oauth20_desktop.srf?code=…">
+      </div>
+      <div class="row"><button class="btn primary" id="msOk">完成登录</button></div>
+    </div>
+
+    <div id="paneAuthlib" style="display:none">
+      <div class="field"><label>用户名</label>
+        <input type="text" id="authlibName" placeholder="皮肤站账号名"></div>
+      <div class="field"><label>外置登录 API 地址</label>
+        <input type="text" id="authlibServer" placeholder="例如 https://littleskin.cn/api/yggdrasil"></div>
+      <div class="row"><button class="btn primary" id="authlibOk">登录</button></div>
+    </div>
+
+    <div class="row"><button class="btn ghost" id="loginCancel">取消</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let bridge = null;
+const $ = id => document.getElementById(id);
+const state = { settings:{}, installed:[], auth:{type:'offline',data:{}}, java:'', versions:[], running:false, filter:'release', search:'' };
+
+/* ---------------- 通用 ---------------- */
+function toast(msg, isErr){
+  const t = $('toast'); t.textContent = msg; t.className = 'toast show' + (isErr?' err':'');
+  clearTimeout(t._h); t._h = setTimeout(()=>t.className='toast', 2600);
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(t){ if(!t) return ''; const d=new Date(t); return (d.getFullYear())+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+
+function showModal(show){ $('loginModal').className = 'modal-mask' + (show?' show':''); }
+function switchAuthPane(p){
+  $('paneOffline').style.display = p==='offline'?'block':'none';
+  $('paneMicrosoft').style.display = p==='microsoft'?'block':'none';
+  $('paneAuthlib').style.display = p==='authlib'?'block':'none';
+}
+function logLine(text, isErr){
+  const b = $('logBody'); const d = document.createElement('div');
+  if(isErr) d.className='err';
+  d.textContent = text;
+  b.appendChild(d);
+  while(b.children.length>1200) b.removeChild(b.firstChild);
+  $('logCount').textContent = b.children.length+' 行';
+  b.scrollTop = b.scrollHeight;
+}
+
+/* ---------------- 渲染 ---------------- */
+function renderAuth(){
+  const a = state.auth || {type:'offline', data:{}};
+  const name = (a.data||{}).username || (a.type==='offline'?'离线玩家':'未登录');
+  $('userName').textContent = name;
+  $('userPill').className = 'user-pill' + (name==='未登录'?' anon':'');
+  const labels = {offline:'离线', microsoft:'微软正版', authlib:'外置登录'};
+  $('authInfo').textContent = (labels[a.type]||a.type) + ' · ' + name;
+}
+
+function renderInstalledVersions(){
+  const list = $('installedList');
+  $('installedCount').textContent = state.installed.length + ' 个';
+  if(!state.installed.length){ list.innerHTML = '<div class="empty"><b>还没有安装任何版本</b>去「下载」页选择一个版本安装吧</div>'; return; }
+  list.innerHTML = state.installed.map(v=>`
+    <div class="version-row">
+      <div class="v-name">${esc(v.id)}</div>
+      <div class="v-type ${esc(v.type||'')}">${esc(v.type||'')}</div>
+      ${v.inheritsFrom?`<div class="v-time">继承 ${esc(v.inheritsFrom)}</div>`:''}
+      <div class="v-installed">✓ 已安装</div>
+    </div>`).join('');
+}
+
+function renderLaunchSelect(){
+  const sel = $('launchVersion');
+  sel.innerHTML = state.installed.length
+    ? state.installed.map(v=>`<option value="${esc(v.id)}">${esc(v.id)}${v.inheritsFrom?'（继承'+esc(v.inheritsFrom)+'）':''}</option>`).join('')
+    : '<option value="">未安装任何版本</option>';
+  if(state.settings.last_version && state.installed.some(v=>v.id===state.settings.last_version)) sel.value = state.settings.last_version;
+}
+
+function renderVersionList(){
+  const box = $('versionList');
+  const q = state.search.toLowerCase();
+  let list = state.versions.filter(v=>{
+    if(state.filter!=='all' && v.type!==state.filter) return false;
+    if(q && !v.id.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  if(!state.versions.length){ box.innerHTML = '<div class="empty"><b>版本列表为空</b>点击右上角「刷新列表」重新获取</div>'; return; }
+  if(!list.length){ box.innerHTML = '<div class="empty"><b>没有匹配的版本</b>换个关键词试试</div>'; return; }
+  const installedIds = new Set(state.installed.map(v=>v.id));
+  box.innerHTML = list.slice(0, 120).map(v=>`
+    <div class="version-row">
+      <div class="v-name">${esc(v.id)}</div>
+      <div class="v-type ${esc(v.type)}">${v.type==='release'?'正式版':v.type==='snapshot'?'快照':'旧版'}</div>
+      <div class="v-time">${fmtDate(v.releaseTime)}</div>
+      ${installedIds.has(v.id)
+        ?'<div class="v-installed">✓ 已安装</div>'
+        :`<button class="btn primary small" onclick="installVersion('${esc(v.id)}')">安装</button>`}
+    </div>`).join('');
+}
+
+function renderModsVersion(){
+  const sel = $('modsVersion');
+  sel.innerHTML = state.installed.length
+    ? state.installed.map(v=>`<option value="${esc(v.id)}">${esc(v.id)}</option>`).join('')
+    : '<option value="">请先安装一个版本</option>';
+}
+
+function renderLoaderGrid(){
+  const loaders = [
+    {id:'fabric', name:'Fabric', desc:'轻量加载器，适合大多数模组与整合包，启动快'},
+    {id:'forge', name:'Forge', desc:'老牌加载器，大型模组兼容性好'},
+    {id:'neoforge', name:'NeoForge', desc:'Forge 的继任者，新版本主流选择'},
+    {id:'quilt', name:'Quilt', desc:'Fabric 的分支，注重社区与创新'},
+  ];
+  $('loaderGrid').innerHTML = loaders.map(l=>`
+    <div class="loader-item" onclick="installLoader('${l.id}')">
+      <div class="l-name">${l.name}</div>
+      <div class="l-desc">${l.desc}</div>
+    </div>`).join('');
+}
+
+function renderSettings(){
+  const s = state.settings;
+  $('setMinecraftDir').value = s.minecraft_directory||'';
+  $('setSource').value = s.download_source||'official';
+  $('setJavaPath').value = s.java_path||'';
+  $('setMemory').value = s.memory_mb||2048;
+  $('memLabel').textContent = (s.memory_mb||2048)+' MB';
+  $('setWidth').value = s.resolution_width||854;
+  $('setHeight').value = s.resolution_height||480;
+  $('setResToggle').textContent = s.resolution_enabled?'开':'关';
+  $('setResToggle').className = 'btn chip' + (s.resolution_enabled?' on':'');
+  $('setJvmArgs').value = s.jvm_args||'';
+  $('memInfo').textContent = (s.memory_mb||2048)+' MB';
+}
+
+function renderJava(){ $('javaInfo').textContent = state.java ? state.java : '未检测到'; }
+function renderAll(){ renderAuth(); renderInstalledVersions(); renderLaunchSelect(); renderModsVersion(); renderLoaderGrid(); renderSettings(); renderJava(); }
+
+/* ---------------- 事件分发 ---------------- */
+function onEvent(raw){
+  let e; try{ e = JSON.parse(raw); }catch(err){ return; }
+  switch(e.type){
+    case 'version_list':
+      state.versions = e.versions||[]; state.installed = state.installed||[];
+      renderVersionList(); break;
+    case 'installed_refresh':
+      state.installed = state.installed.filter(v=>false);
+      state.installed = (e.installed||[]).map(id=>({id}));
+      state.settings.last_version = state.settings.last_version||'';
+      renderAll(); refreshInstalledDetail(); break;
+    case 'install_start': showProgress('dlProgressWrap', `开始安装 ${e.version}…`); break;
+    case 'install_progress':
+      updateProgress('dlProgressWrap', e); break;
+    case 'install_done':
+      hideProgress('dlProgressWrap'); toast(`✅ ${e.version} 安装完成`); refreshInstalledDetail(); break;
+    case 'install_error':
+      hideProgress('dlProgressWrap'); toast(`❌ 安装失败：${e.error}`, true); logLine('安装失败：'+e.error, true); break;
+    case 'auth_updated':
+      state.auth = e.auth; renderAuth(); toast('✅ 登录成功'); showModal(false); break;
+    case 'log':
+      logLine(e.line||''); break;
+    case 'game_state':
+      state.running = e.state==='running';
+      renderGameState(); break;
+    case 'loader_versions': break;
+    case 'loader_start':
+      showProgress('modProgressWrap', '开始安装…'); break;
+    case 'loader_event':
+      if(e.line) logLine(e.line);
+      if(e.progress!=null) updateProgress('modProgressWrap', {progress:e.progress});
+      if(e.max!=null) setMax('modProgressWrap', e.max);
+      break;
+    case 'loader_done':
+      hideProgress('modProgressWrap'); toast('✅ 安装完成'); refreshInstalledDetail(); break;
+    case 'loader_error':
+      hideProgress('modProgressWrap'); toast(`❌ ${e.error}`, true); logLine(e.error, true); break;
+    case 'settings_saved':
+      state.settings = e.settings; renderSettings(); toast('✅ 设置已保存'); break;
+    case 'error':
+      toast('❌ '+e.error, true); logLine(e.error, true); break;
+  }
+}
+
+function renderGameState(){
+  const badge = $('gameBadge'), txt = $('gameBadgeText');
+  if(state.running){
+    badge.className='status-badge st-run'; txt.textContent='游戏运行中';
+    $('launchBtn').disabled=true; $('stopBtn').disabled=false;
+  }else{
+    badge.className='status-badge st-idle'; txt.textContent='未运行';
+    $('launchBtn').disabled = !$('launchVersion').value;
+    $('stopBtn').disabled = true;
+  }
+}
+
+/* ---------------- 进度条 ---------------- */
+function showProgress(wrapId, status){ $(wrapId).classList.add('show'); $(wrapId+'Status').textContent = status; }
+function setMax(wrapId, max){ $(wrapId+'_max') = max; }
+function updateProgress(wrapId, e){
+  if(e.status) $(wrapId+'Status').textContent = e.status;
+  if(e.progress!=null){
+    const max = $(wrapId+'_max')||100;
+    const pct = Math.min(100, Math.round((e.progress/(max||100))*100));
+    $(wrapId+'Fill').style.width = pct+'%';
+  }
+  if(e.done!=null && e.total){ $(wrapId+'Fill').style.width = Math.min(100, Math.round(e.done/e.total*100))+'%'; }
+  if(e.file) $(wrapId+'Status').textContent = '正在下载：'+e.file;
+}
+function hideProgress(wrapId){
+  $(wrapId).classList.remove('show');
+  $(wrapId+'Fill').style.width = '0';
+}
+
+/* ---------------- 动作 ---------------- */
+function installVersion(id){
+  if(!confirm(`确定下载并安装 ${id} 吗？`)) return;
+  bridge.install_version(id);
+}
+function installLoader(id){
+  const mc = $('modsVersion').value;
+  if(!mc){ toast('请先安装一个 Minecraft 版本', true); return; }
+  if(!confirm(`为 ${mc} 安装 ${id} 加载器（使用最新版本）？`)) return;
+  bridge.install_loader(id, mc, '');
+}
+function refreshInstalledDetail(){
+  bridge.get_init().then ? null : null;
+  const init = bridge.get_init();
+  try{
+    const d = JSON.parse(init);
+    state.installed = d.installed_versions||[];
+    state.settings = Object.assign(state.settings, d.settings||{});
+    state.auth = d.auth||state.auth;
+    state.java = d.java||state.java;
+    renderAll();
+  }catch(e){}
+}
+
+/* ---------------- 导航 ---------------- */
+document.querySelectorAll('.nav-item').forEach(el=>{
+  el.addEventListener('click', ()=>{
+    document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('on'));
+    el.classList.add('on');
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    $('page-'+el.dataset.page).classList.add('active');
+    if(el.dataset.page==='download') bridge.refresh_version_list();
+  });
+});
+
+/* ---------------- 登录 ---------------- */
+$('loginBtn').addEventListener('click', ()=>showModal(true));
+$('loginCancel').addEventListener('click', ()=>showModal(false));
+$('tabOffline').addEventListener('click', ()=>switchAuthPane('offline'));
+$('tabMicrosoft').addEventListener('click', ()=>{
+  switchAuthPane('microsoft');
+  try{
+    const r = JSON.parse(bridge.microsoft_login_start());
+    if(r.ok) $('msUrl').textContent = r.url;
+    else toast('❌ '+r.error, true);
+  }catch(e){ toast('❌ 无法发起登录', true); }
+});
+$('tabAuthlib').addEventListener('click', ()=>switchAuthPane('authlib'));
+$('offlineOk').addEventListener('click', ()=>{
+  const n = $('offlineName').value.trim();
+  if(!n){ toast('请输入名字', true); return; }
+  bridge.login_offline(n);
+});
+$('msOk').addEventListener('click', ()=>{
+  const url = $('msCallback').value.trim();
+  if(!url){ toast('请粘贴授权完成后的完整网址', true); return; }
+  bridge.microsoft_login_complete(url);
+});
+$('authlibOk').addEventListener('click', ()=>{
+  bridge.authlib_login($('authlibName').value.trim(), $('authlibServer').value.trim());
+});
+
+/* ---------------- 首页 ---------------- */
+$('launchBtn').addEventListener('click', ()=>{
+  const v = $('launchVersion').value;
+  if(!v) return;
+  logLine('== 正在启动 '+v+' ==');
+  bridge.launch(v);
+});
+$('stopBtn').addEventListener('click', ()=>{ bridge.stop_game(); logLine('请求停止游戏…'); });
+$('logToggleBtn').addEventListener('click', ()=>{
+  const d = $('logDrawer'); d.classList.toggle('open');
+  $('logToggleBtn').textContent = d.classList.contains('open')?'收起日志':'打开日志';
+});
+$('logHead').addEventListener('click', ()=>{
+  const d = $('logDrawer'); d.classList.toggle('open');
+  $('logToggleBtn').textContent = d.classList.contains('open')?'收起日志':'打开日志';
+});
+$('launchVersion').addEventListener('change', ()=>{ renderGameState(); });
+
+/* ---------------- 下载页 ---------------- */
+$('searchInput').addEventListener('input', ()=>{ state.search = $('searchInput').value; renderVersionList(); });
+document.querySelectorAll('#fAll,#fRelease,#fSnapshot').forEach(el=>{
+  el.addEventListener('click', ()=>{
+    document.querySelectorAll('#fAll,#fRelease,#fSnapshot').forEach(x=>x.classList.remove('on'));
+    el.classList.add('on'); state.filter = el.dataset.type; renderVersionList();
+  });
+});
+$('refreshBtn').addEventListener('click', ()=>{ bridge.refresh_version_list(); toast('正在刷新版本列表…'); });
+
+/* ---------------- 模组页 ---------------- */
+$('importBtn').addEventListener('click', ()=>$('importFile').click());
+$('importFile').addEventListener('change', ()=>{
+  const f = $('importFile').files[0];
+  if(f){ bridge.import_modpack(f.path||f.name); }
+  $('importFile').value = '';
+});
+$('openModsBtn').addEventListener('click', ()=>{
+  try{ bridge.open_folder(JSON.parse(bridge.get_mods_folder()).path); }catch(e){}
+});
+$('openGameDirBtn').addEventListener('click', ()=>{
+  bridge.open_folder(state.settings.minecraft_directory||'');
+});
+
+/* ---------------- 设置页 ---------------- */
+$('browseDirBtn').addEventListener('click', ()=>{
+  const p = prompt('输入 .minecraft 目录的完整路径：', state.settings.minecraft_directory||'');
+  if(p) $('setMinecraftDir').value = p;
+});
+$('detectJavaBtn').addEventListener('click', ()=>{
+  const r = JSON.parse(bridge.detect_java());
+  if(r.ok){ $('setJavaPath').value = r.path; toast('✅ 检测到 Java '+r.version); }
+  else toast('❌ '+r.error, true);
+});
+$('browseJavaBtn').addEventListener('click', ()=>{
+  const r = JSON.parse(bridge.choose_java());
+  if(r.ok){ $('setJavaPath').value = r.path; toast('✅ 已选择 Java'); }
+});
+$('setMemory').addEventListener('input', ()=>{ $('memLabel').textContent = $('setMemory').value+' MB'; });
+$('setResToggle').addEventListener('click', ()=>{
+  const on = $('setResToggle').textContent==='关';
+  $('setResToggle').textContent = on?'开':'关';
+  $('setResToggle').className = 'btn chip'+(on?' on':'');
+});
+$('saveSettingsBtn').addEventListener('click', ()=>{
+  const s = {
+    minecraft_directory: $('setMinecraftDir').value.trim(),
+    download_source: $('setSource').value,
+    java_path: $('setJavaPath').value.trim(),
+    memory_mb: parseInt($('setMemory').value,10),
+    resolution_enabled: $('setResToggle').textContent==='开',
+    resolution_width: parseInt($('setWidth').value,10)||854,
+    resolution_height: parseInt($('setHeight').value,10)||480,
+    jvm_args: $('setJvmArgs').value.trim(),
+  };
+  bridge.save_settings(JSON.stringify(s));
+});
+
+/* ---------------- 初始化 ---------------- */
+function init(){
+  try{
+    const d = JSON.parse(bridge.get_init());
+    state.settings = d.settings||{}; state.installed = d.installed_versions||[];
+    state.auth = d.auth||state.auth; state.java = d.java||'';
+    renderAll(); renderGameState();
+  }catch(e){ logLine('初始化失败：'+e, true); }
+  bridge.refresh_version_list();
+}
+
+new QWebChannel(qt.webChannelTransport, function(channel){
+  bridge = channel.objects.bridge;
+  bridge.event.connect(onEvent);
+  init();
+});
+</script>
+</body>
+</html>
