@@ -1,0 +1,26 @@
+{
+  "minecraft_directory": "C:\\Users\\m1504\\AppData\\Roaming\\.minecraft",
+  "download_source": "official",
+  "java_path": "",
+  "memory_mb": 7680,
+  "resolution_enabled": false,
+  "resolution_width": 854,
+  "resolution_height": 480,
+  "jvm_args": "",
+  "auth_type": "offline",
+  "auth_data": {
+    "username": "Xueyuan_DF",
+    "uuid": "bd048c7b-5c5f-3371-a9bf-df9061cec0a4",
+    "token": "0"
+  },
+  "last_version": "1.20.1-forge-47.3.22",
+  "launcher_name": "雪原启动器",
+  "launcher_version": "1.5.0",
+  "window_geometry": [
+    1008,
+    404,
+    1120,
+    740
+  ],
+  "window_maximized": false
+}
